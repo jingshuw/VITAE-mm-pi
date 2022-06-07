@@ -144,44 +144,44 @@ class Decoder(Layer):
     '''
     Decoder, model \(p(Y_i|Z_i,X_i)\).
     '''
-    def __init__(self, dimensions, dim_origin, data_type = 'UMI', 
+    def __init__(self, dim_hidden_layers, dim_output, model_type = 'UMI', 
                 name = 'decoder', **kwargs):
         '''
         Parameters
         ----------
-        dimensions : np.array
+        dim_hidden_layers : np.array
             The dimensions of hidden layers of the encoder.
-        dim_origin : int
+        dim_output : int
             The output dimension of the decoder.
-        data_type : str, optional
+        model_type : str, optional
             `'UMI'`, `'non-UMI'`, or `'Gaussian'`.
         name : str, optional
             The name of the layer.
         '''
         super(Decoder, self).__init__(name = name, **kwargs)
-        self.data_type = data_type
+        self.model_type = model_type
         self.dense_layers = [Dense(dim, activation = tf.nn.leaky_relu,
                                           name = 'decoder_%i'%(i+1)) \
-                             for (i,dim) in enumerate(dimensions)]
+                             for (i,dim) in enumerate(dim_hidden_layers)]
         self.batch_norm_layers = [BatchNormalization(center=False) \
-                                    for _ in range(len((dimensions)))]
+                                    for _ in range(len((dim_hidden_layers)))]
 
-        if data_type=='Gaussian':
-            self.nu_z = Dense(dim_origin, name = 'nu_z')
+        if model_type=='Gaussian':
+            self.nu_z = Dense(dim_output, name = 'nu_z')
             # common variance
-            self.log_tau = tf.Variable(tf.zeros([1, dim_origin], dtype=tf.keras.backend.floatx()),
+            self.log_tau = tf.Variable(tf.zeros([1, dim_output], dtype=tf.keras.backend.floatx()),
                                  constraint = lambda t: tf.clip_by_value(t,-30.,6.),
                                  name = "log_tau")
         else:
-            self.log_lambda_z = Dense(dim_origin, name = 'log_lambda_z')
+            self.log_lambda_z = Dense(dim_output, name = 'log_lambda_z')
 
             # dispersion parameter
-            self.log_r = tf.Variable(tf.zeros([1, dim_origin], dtype=tf.keras.backend.floatx()),
+            self.log_r = tf.Variable(tf.zeros([1, dim_output], dtype=tf.keras.backend.floatx()),
                                      constraint = lambda t: tf.clip_by_value(t,-30.,6.),
                                      name = "log_r")
             
-            if self.data_type == 'non-UMI':
-                self.phi = Dense(dim_origin, activation = 'sigmoid', name = "phi")
+            if self.model_type == 'non-UMI':
+                self.phi = Dense(dim_output, activation = 'sigmoid', name = "phi")
           
     @tf.function  
     def call(self, z, is_training=True):
@@ -194,7 +194,7 @@ class Decoder(Layer):
         is_training : boolean, optional
             whether in the training or inference mode.
 
-        When `data_type=='Gaussian'`:
+        When `model_type=='Gaussian'`:
 
         Returns
         ----------
@@ -203,7 +203,7 @@ class Decoder(Layer):
         tau : tf.Tensor
             \([1, G]\) The variance of \(Y_i|Z_i,X_i\).
 
-        When `data_type=='UMI'`:
+        When `model_type=='UMI'`:
 
         Returns
         ----------
@@ -212,7 +212,7 @@ class Decoder(Layer):
         r : tf.Tensor
             \([1, G]\) The dispersion parameters of \(Y_i|Z_i,X_i\).
 
-        When `data_type=='non-UMI'`:
+        When `model_type=='non-UMI'`:
 
         Returns
         ----------
@@ -226,7 +226,7 @@ class Decoder(Layer):
         for dense, bn in zip(self.dense_layers, self.batch_norm_layers):
             z = dense(z)
             z = bn(z, training=is_training)
-        if self.data_type=='Gaussian':
+        if self.model_type=='Gaussian':
             nu_z = self.nu_z(z)
             tau = tf.exp(self.log_tau)
             return nu_z, tau
@@ -235,7 +235,7 @@ class Decoder(Layer):
                 tf.clip_by_value(self.log_lambda_z(z), -30., 6.)
                 )
             r = tf.exp(self.log_r)
-            if self.data_type=='UMI':
+            if self.model_type=='UMI':
                 return lambda_z, r
             else:
                 return lambda_z, r, self.phi(z)
@@ -531,15 +531,15 @@ class VariationalAutoEncoder(tf.keras.Model):
     """
     Combines the encoder, decoder and LatentSpace into an end-to-end model for training and inference.
     """
-    def __init__(self, dim_origin, dimensions, dim_latent,
+    def __init__(self, dim_output, dim_hidden_layers, dim_latent,
                  model_type = 'UMI', has_cov=False,
                  name = 'autoencoder', **kwargs):
         '''
         Parameters
         ----------
-        dim_origin : int
+        dim_output : int
             The output dimension of the decoder.        
-        dimensions : np.array
+        dim_hidden_layers : np.array
             The dimensions of hidden layers of the encoder.
         dim_latent : int
             The latent dimension.
@@ -556,10 +556,10 @@ class VariationalAutoEncoder(tf.keras.Model):
         '''
         super(VariationalAutoEncoder, self).__init__(name = name, **kwargs)
         self.model_type = model_type
-        self.dim_origin = dim_origin
+        self.dim_output = dim_output
         self.dim_latent = dim_latent
-        self.encoder = Encoder(dimensions, dim_latent)
-        self.decoder = Decoder(dimensions[::-1], dim_origin, model_type, model_type)        
+        self.encoder = Encoder(dim_hidden_layers, dim_latent)
+        self.decoder = Decoder(dim_hidden_layers[::-1], dim_output, model_type, model_type)        
         self.has_cov = has_cov
         
     def init_latent_space(self, n_clusters, mu, log_pi=None):
@@ -684,7 +684,7 @@ class VariationalAutoEncoder(tf.keras.Model):
     
     @tf.function
     def _get_reconstruction_loss(self, x, z_in, scale_factor, L):
-        if self.data_type=='Gaussian':
+        if self.model_type=='Gaussian':
             # Gaussian Log-Likelihood Loss function
             nu_z, tau = self.decoder(z_in)
             neg_E_Gaus = 0.5 * tf.math.log(tf.clip_by_value(tau, 1e-12, 1e30)) + 0.5 * tf.math.square(x - nu_z) / tau
@@ -692,7 +692,7 @@ class VariationalAutoEncoder(tf.keras.Model):
 
             return neg_E_Gaus
         else:
-            if self.data_type == 'UMI':
+            if self.model_type == 'UMI':
                 x_hat, r = self.decoder(z_in)
             else:
                 x_hat, r, phi = self.decoder(z_in)
@@ -710,7 +710,7 @@ class VariationalAutoEncoder(tf.keras.Model):
                         (r+x) * tf.math.log(1.0 + (x_hat/r)) + \
                         x * (tf.math.log(r) - tf.math.log(tf.clip_by_value(x_hat, 1e-12, 1e30)))
             
-            if self.data_type == 'non-UMI':
+            if self.model_type == 'non-UMI':
                 # Zero-Inflated Negative Binomial loss
                 nb_case = neg_E_nb - tf.math.log(tf.clip_by_value(1.0-phi, 1e-12, 1e30))
                 zero_case = - tf.math.log(tf.clip_by_value(
