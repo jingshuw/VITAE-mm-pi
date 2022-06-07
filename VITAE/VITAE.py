@@ -90,14 +90,14 @@ class VITAE():
         else:
             self.adata = adata
         if covariates is not None:
-            self.c_score = adata.obs[covariates].to_numpy()
+            self.covariates = adata.obs[covariates].to_numpy().astype(tf.keras.backend.floatx())
         else:
-            self.c_score = None
+            self.covariates = None
 
         if pi_covariates is not None:
-            self.pi_cov = adata.obs[pi_covariates].to_numpy()
+            self.pi_cov = adata.obs[pi_covariates].to_numpy().astype(tf.keras.backend.floatx())
             if self.pi_cov.ndim == 1:
-                self.pi_cov = self.pi_cov.reshape(-1, 1)
+                self.pi_cov = self.pi_cov.reshape(-1, 1).astype(tf.keras.backend.floatx())
         else:
             self.pi_cov = None
             
@@ -109,15 +109,15 @@ class VITAE():
 
         if model_type == 'Gaussian':
             sc.tl.pca(adata, n_comps = npc)
-            self.X_input = self.X_output = adata.obsm['X_pca']
+            self.X_input = self.X_output = adata.obsm['X_pca'].astype(tf.keras.backend.floatx())
             self.scale_factor = np.ones(self.X_output.shape[0])
         else:
             print(f"{adata.var.highly_variable.sum()} highly variable genes selected as input") 
-            self.X_input = adata.X[:, adata.var.highly_variable]
-            self.X_output = adata.layers[adata_layer_counts][ :, adata.var.highly_variable]
+            self.X_input = adata.X[:, adata.var.highly_variable].astype(tf.keras.backend.floatx())
+            self.X_output = adata.layers[adata_layer_counts][ :, adata.var.highly_variable].astype(tf.keras.backend.floatx())
             self.scale_factor = np.sum(self.X_output, axis=1, keepdims=True)/1e4
+            self.scale_factor = self.scale_factor.astype(tf.keras.backend.floatx())
 
-        self.dimensions = hidden_layers
         self.dim_latent = latent_space_dim
 
         if isinstance(conditions,str):
@@ -127,9 +127,9 @@ class VITAE():
 
 
         self.vae = model.VariationalAutoEncoder(
-            self.X_output.shape[1], self.dimensions,
+            self.X_output.shape[1], hidden_layers,
             self.dim_latent, self.model_type,
-            False if self.c_score is None else True,
+            False if self.covariates is None else True,
             )
 
         if hasattr(self, 'inferer'):
@@ -190,22 +190,22 @@ class VITAE():
                                 random_state=random_state)
         if num_step_per_epoch is None:
             num_step_per_epoch = len(id_train)//batch_size+1
-        self.train_dataset = train.warp_dataset(self.X_input[id_train].astype(tf.keras.backend.floatx()), 
-                                                None if self.c_score is None else self.c_score[id_train].astype(tf.keras.backend.floatx()),
-                                                batch_size, 
-                                                self.X_output[id_train].astype(tf.keras.backend.floatx()), 
-                                                self.scale_factor[id_train].astype(tf.keras.backend.floatx()),
-                                                conditions = conditions[id_train])
-        self.test_dataset = train.warp_dataset(self.X_input[id_test], 
-                                                None if self.c_score is None else self.c_score[id_test].astype(tf.keras.backend.floatx()),
-                                                batch_size, 
-                                                self.X_output[id_test].astype(tf.keras.backend.floatx()), 
-                                                self.scale_factor[id_test].astype(tf.keras.backend.floatx()),
-                                                conditions = conditions[id_test])
+        train_dataset = train.warp_dataset(self.X_input[id_train],
+                None if self.covariates is None else self.covariates[id_train],
+                batch_size, 
+                self.X_output[id_train], 
+                self.scale_factor[id_train],
+                conditions = conditions[id_train])
+        test_dataset = train.warp_dataset(self.X_input[id_test], 
+                None if self.covariates is None else self.covariates[id_test],
+                batch_size, 
+                self.X_output[id_test], 
+                self.scale_factor[id_test],
+                conditions = conditions[id_test])
 
         self.vae = train.pre_train(
-            self.train_dataset,
-            self.test_dataset,
+            train_dataset,
+            test_dataset,
             self.vae,
             learning_rate,                        
             L, alpha, gamma,
@@ -236,7 +236,7 @@ class VITAE():
         z : np.array
             \([N,d]\) The latent means.
         ''' 
-        c = None if self.c_score is None else self.c_score
+        c = None if self.covariates is None else self.covariates
         return self.vae.get_z(self.X_input, c)
             
     
@@ -536,25 +536,24 @@ class VITAE():
                                 random_state=random_state)
         if num_step_per_epoch is None:
             num_step_per_epoch = len(id_train)//batch_size+1
-        c = None if self.c_score is None else self.c_score.astype(tf.keras.backend.floatx())
-        self.train_dataset = train.warp_dataset(self.X_input[id_train].astype(tf.keras.backend.floatx()),
-                                                None if c is None else c[id_train],
-                                                batch_size, 
-                                                self.X_output[id_train].astype(tf.keras.backend.floatx()), 
-                                                self.scale_factor[id_train].astype(tf.keras.backend.floatx()),
-                                                conditions = conditions[id_train],
-                                                pi_cov = self.pi_cov[id_train])
-        self.test_dataset = train.warp_dataset(self.X_input[id_test].astype(tf.keras.backend.floatx()),
-                                                None if c is None else c[id_test],
-                                                batch_size, 
-                                                self.X_output[id_test].astype(tf.keras.backend.floatx()), 
-                                                self.scale_factor[id_test].astype(tf.keras.backend.floatx()),
-                                                conditions = conditions[id_test],
-                                                pi_cov = self.pi_cov[id_test])
+        train_dataset = train.warp_dataset(self.X_input[id_train],
+                None if self.covariates is None else self.covariates[id_train],
+                batch_size, 
+                self.X_output[id_train], 
+                self.scale_factor[id_train],
+                conditions = conditions[id_train],
+                pi_cov = self.pi_cov[id_train])
+        test_dataset = train.warp_dataset(self.X_input[id_test],
+                None if self.covariates is None else self.covariates[id_test],
+                batch_size, 
+                self.X_output[id_test],
+                self.scale_factor[id_test],
+                conditions = conditions[id_test],
+                pi_cov = self.pi_cov[id_test])
                                    
         self.vae = train.train(
-            self.train_dataset,
-            self.test_dataset,
+            train_dataset,
+            test_dataset,
             self.vae,
             learning_rate,
             L,
@@ -596,6 +595,7 @@ class VITAE():
         """return parameters of pilayer, which has dimension dim(pi_cov) + 1 by n_categories, the last row is biases"""
         return np.vstack((model.vae.pilayer.weights[0].numpy(), model.vae.pilayer.weights[1].numpy().reshape(1, -1)))
 
+   ### TODO: Why do we reset test_dataset here?
     def posterior_estimation(self, batch_size: int = 32, L: int = 10, **kwargs):
         '''Initialize trajectory inference by computing the posterior estimations.        
 
@@ -608,12 +608,12 @@ class VITAE():
         **kwargs :  
             Extra key-value arguments for dimension reduction algorithms.              
         '''
-        c = None if self.c_score is None else self.c_score.astype(tf.keras.backend.floatx())
-        self.test_dataset = train.warp_dataset(self.X_input.astype(tf.keras.backend.floatx()), 
-                                               c,
-                                               batch_size)
+        c = None if self.covariates is None else self.covariates.astype(tf.keras.backend.floatx())
+        test_dataset = train.warp_dataset(self.X_input, 
+                self.covariates,
+                batch_size)
         _, _, self.pc_x,\
-            self.cell_position_posterior,self.cell_position_variance,_ = self.vae.inference(self.test_dataset, L=L)
+            self.cell_position_posterior,self.cell_position_variance,_ = self.vae.inference(test_dataset, L=L)
             
         uni_cluster_labels = self.labels_map['label_names'].to_numpy()
         self.adata.obs['vitae_new_clustering'] = uni_cluster_labels[np.argmax(self.cell_position_posterior, 1)]
@@ -871,10 +871,10 @@ class VITAE():
 #        Y = np.divide(Y-np.mean(Y, axis=0, keepdims=True), std_Y, out=np.empty_like(Y)*np.nan, where=std_Y!=0)
         X = stats.rankdata(self.pseudotime[cell_subset])
         X = ((X-np.mean(X))/np.std(X, ddof=1)).reshape((-1,1))
-        if self.c_score is None:
+        if self.covariates is None:
             X = np.c_[np.ones_like(X), X]
         else:
-            X = np.c_[np.ones_like(X), X, self.c_score[cell_subset,:]]
+            X = np.c_[np.ones_like(X), X, self.covariates[cell_subset,:]]
 
         res_df = DE_test(Y, X, self.adata.var_names, alpha)
         return res_df

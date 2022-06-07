@@ -526,13 +526,13 @@ class LatentSpace(Layer):
             res['var_w_tilde'] = var_w_tilde.numpy()
             return res
             
-            
+## TODO: change data_type to model_type            
 class VariationalAutoEncoder(tf.keras.Model):
     """
     Combines the encoder, decoder and LatentSpace into an end-to-end model for training and inference.
     """
     def __init__(self, dim_origin, dimensions, dim_latent,
-                 data_type = 'UMI', has_cov=False,
+                 model_type = 'UMI', has_cov=False,
                  name = 'autoencoder', **kwargs):
         '''
         Parameters
@@ -543,7 +543,7 @@ class VariationalAutoEncoder(tf.keras.Model):
             The dimensions of hidden layers of the encoder.
         dim_latent : int
             The latent dimension.
-        data_type : str, optional
+        model_type : str, optional
             `'UMI'`, `'non-UMI'`, or `'Gaussian'`.
         has_cov : boolean
             Whether has covariates or not.
@@ -555,11 +555,11 @@ class VariationalAutoEncoder(tf.keras.Model):
             Extra keyword arguments.
         '''
         super(VariationalAutoEncoder, self).__init__(name = name, **kwargs)
-        self.data_type = data_type
+        self.model_type = model_type
         self.dim_origin = dim_origin
         self.dim_latent = dim_latent
         self.encoder = Encoder(dimensions, dim_latent)
-        self.decoder = Decoder(dimensions[::-1], dim_origin, data_type, data_type)        
+        self.decoder = Decoder(dimensions[::-1], dim_origin, model_type, model_type)        
         self.has_cov = has_cov
         
     def init_latent_space(self, n_clusters, mu, log_pi=None):
@@ -593,9 +593,9 @@ class VariationalAutoEncoder(tf.keras.Model):
         c_score : np.array
             \([B, s]\) The covariates \(X_i\), only used when `has_cov=True`.
         x : np.array, optional
-            \([B, G]\) The original count data \(Y_i\), only used when data_type is not `'Gaussian'`.
+            \([B, G]\) The original count data \(Y_i\), only used when model_type is not `'Gaussian'`.
         scale_factor : np.array, optional
-            \([B, ]\) The scale factors, only used when data_type is not `'Gaussian'`.
+            \([B, ]\) The scale factors, only used when model_type is not `'Gaussian'`.
         pre_train : boolean, optional
             Whether in the pre-training phare or not.
         L : int, optional
@@ -604,6 +604,7 @@ class VariationalAutoEncoder(tf.keras.Model):
             The penalty parameter for covariates adjustment.
         conditions: str or list, optional
             The conditions of different cells from the selected batch
+        pi_cov: 
 
         Returns
         ----------

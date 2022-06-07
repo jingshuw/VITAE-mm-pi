@@ -15,7 +15,8 @@ def clear_session():
     tf.keras.backend.clear_session()
     return None
 
-    
+
+## TODO: currently X is implemented as the output
 def warp_dataset(X_normalized, c_score, batch_size:int, X=None, scale_factor=None, seed=0, conditions = None, pi_cov = None):
     '''Get Tensorflow datasets.
 
