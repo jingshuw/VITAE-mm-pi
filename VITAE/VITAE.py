@@ -45,6 +45,8 @@ class VITAE():
             The scanpy AnnData object. adata should already contain adata.var.highly_variable
         covariates : list, optional
             A list of names of covariate vectors that are stored in adata.obs
+        pi_covariates: list, optional
+            A list of names of covariate vectors used as input for pilayer
         model_type : str, optional
             'UMI', 'non-UMI' and 'Gaussian', default is 'Gaussian'.
         npc : int, optional
@@ -93,7 +95,9 @@ class VITAE():
             self.c_score = None
 
         if pi_covariates is not None:
-            self.pi_cov = adata.obs[pi_covariates].to_numpy().reshape(-1, 1)
+            self.pi_cov = adata.obs[pi_covariates].to_numpy()
+            if self.pi_cov.ndim == 1:
+                self.pi_cov = self.pi_cov.reshape(-1, 1)
         else:
             self.pi_cov = None
             
@@ -574,7 +578,23 @@ class VITAE():
             
  #       if path_to_weights is not None:
  #           self.save_model(path_to_weights)
-          
+    
+
+    def output_pi(self, pi_cov):
+        """return a matrix n_states by n_states and a mask for plotting, which can be used to cover the lower triangular(except the diagnoals) of a heatmap"""
+        p = self.vae.pilayer
+        pi_cov = tf.expand_dims(tf.constant([pi_cov], dtype=tf.float32), 0)
+        pi_val = tf.nn.softmax(p(pi_cov)).numpy()[0]
+        # Create heatmap matrix
+        n = self.vae.n_states
+        matrix = np.zeros((n, n))
+        matrix[np.triu_indices(n)] = pi_val
+        mask = np.tril(np.ones_like(matrix), k=-1)
+        return matrix, mask
+
+    def return_pilayer_weights(self):
+        """return parameters of pilayer, which has dimension dim(pi_cov) + 1 by n_categories, the last row is biases"""
+        return np.vstack((model.vae.pilayer.weights[0].numpy(), model.vae.pilayer.weights[1].numpy().reshape(1, -1)))
 
     def posterior_estimation(self, batch_size: int = 32, L: int = 10, **kwargs):
         '''Initialize trajectory inference by computing the posterior estimations.        
