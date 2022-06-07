@@ -542,14 +542,14 @@ class VITAE():
                 self.X_output[id_train], 
                 self.scale_factor[id_train],
                 conditions = conditions[id_train],
-                pi_cov = self.pi_cov[id_train])
+                pi_cov = None if self.pi_cov is None else self.pi_cov[id_train])
         test_dataset = train.warp_dataset(self.X_input[id_test],
                 None if self.covariates is None else self.covariates[id_test],
                 batch_size, 
                 self.X_output[id_test],
                 self.scale_factor[id_test],
                 conditions = conditions[id_test],
-                pi_cov = self.pi_cov[id_test])
+                pi_cov = None if self.pi_cov is None else self.pi_cov[id_test])
                                    
         self.vae = train.train(
             train_dataset,
