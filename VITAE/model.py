@@ -547,8 +547,6 @@ class VariationalAutoEncoder(tf.keras.Model):
             `'UMI'`, `'non-UMI'`, or `'Gaussian'`.
         has_cov : boolean
             Whether has covariates or not.
-        gamma : float, optional
-            The weights of the MMD loss
         name : str, optional
             The name of the layer.
         **kwargs : 
@@ -562,20 +560,19 @@ class VariationalAutoEncoder(tf.keras.Model):
         self.decoder = Decoder(dim_hidden_layers[::-1], dim_output, model_type, model_type)        
         self.has_cov = has_cov
         
-    def init_latent_space(self, n_clusters, mu, log_pi=None):
+    def init_latent_space(self, n_states, mu, log_pi=None):
         '''Initialze the latent space.
 
         Parameters
         ----------
-        n_clusters : int
+        n_states : int
             The number of vertices in the latent space.
         mu : np.array
             \([d, k]\) The position matrix.
         log_pi : np.array, optional
             \([1, K]\) \(\\log\\pi\).
         '''
-        self.n_states = n_clusters
-        self.latent_space = LatentSpace(self.n_states, self.dim_latent)
+        self.latent_space = LatentSpace(n_states, self.dim_latent)
         self.latent_space.initialize(mu, log_pi)
         self.pilayer = None
 
@@ -621,10 +618,9 @@ class VariationalAutoEncoder(tf.keras.Model):
             x_normalized
         _, z_log_var, z = self.encoder(x_normalized, L)
 
-        self.gamma = gamma
 
         # The block below is used to calculate the MMD loss
-        if self.gamma != 0:
+        if gamma != 0:
             z_pred = z[~tf.math.is_nan(conditions)]
             conditions = conditions[~tf.math.is_nan(conditions)]
 
@@ -644,7 +640,7 @@ class VariationalAutoEncoder(tf.keras.Model):
                 if n_group == 1:
                     _loss = 0.0
                 else:
-                    _loss = self._mmd_loss(real_labels=indv_group, y_pred=z_pred[idx], gamma = self.gamma,
+                    _loss = self._mmd_loss(real_labels=indv_group, y_pred=z_pred[idx], gamma = gamma,
                                            n_conditions = n_group,
                                            kernel_method='multi-scale-rbf',
                                            computation_method="general")
