@@ -193,13 +193,13 @@ class VITAE():
         train_dataset = train.warp_dataset(self.X_input[id_train],
                 None if self.covariates is None else self.covariates[id_train],
                 batch_size, 
-                None if self.model_type is 'Gaussian' else self.X_output[id_train], 
+                self.X_output[id_train], 
                 self.scale_factor[id_train],
                 conditions = conditions[id_train])
         test_dataset = train.warp_dataset(self.X_input[id_test], 
                 None if self.covariates is None else self.covariates[id_test],
                 batch_size, 
-                None if self.model_type is 'Gaussian' else self.X_output[id_test], 
+                self.X_output[id_test], 
                 self.scale_factor[id_test],
                 conditions = conditions[id_test])
 

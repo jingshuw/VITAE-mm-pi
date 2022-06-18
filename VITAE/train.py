@@ -23,13 +23,13 @@ def warp_dataset(X_normalized, c_score, batch_size:int, X=None, scale_factor=Non
     Parameters
     ----------
     X_normalized : np.array
-        \([N, G]\) The preprocessed data.
+        \([N, G]\) The preprocessed input data.
     c_score : float, optional
         The normalizing constant.
     batch_size : int
         The batch size.
     X : np.array, optional
-        \([N, G]\) The raw count data.
+        \([N, G]\) The output data.
     scale_factor : np.array, optional
         \([N, ]\) The raw count data.
     seed : int, optional
