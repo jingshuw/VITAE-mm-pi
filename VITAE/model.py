@@ -447,7 +447,7 @@ class LatentSpace(Layer):
             The dict of posterior estimations - \(p(c_i|Y_i,X_i)\), \(c\), \(E(\\tilde{w}_i|Y_i,X_i)\), \(Var(\\tilde{w}_i|Y_i,X_i)\), \(D_{JS}\).
         '''                 
         eps = 1e-16 if not inference else 0.
-        temp_pi, beta_zc, _inv_sig, _nu, log_eta0, eta1, eta2, log_p_zc_L, log_p_z_L, log_p_z = self._get_pz(z, eps, log_pi)
+        temp_pi, beta_zc, _inv_sig, _nu, log_eta0, eta1, eta2, log_p_zc_L, log_p_z_L, log_p_z = self._get_pz(z, log_pi, eps)
 
         if not inference:
             return log_p_z
