@@ -132,8 +132,8 @@ class VITAE():
             False if self.covariates is None else True,
             )
 
-        if hasattr(self, 'inferer'):
-            delattr(self, 'inferer')
+    #    if hasattr(self, 'inferer'):
+    #        delattr(self, 'inferer')
 
 ## TODO: what does the two last lines mean?        
         
@@ -193,13 +193,13 @@ class VITAE():
         train_dataset = train.warp_dataset(self.X_input[id_train],
                 None if self.covariates is None else self.covariates[id_train],
                 batch_size, 
-                self.X_output[id_train], 
+                None if self.model_type is 'Gaussian' else self.X_output[id_train], 
                 self.scale_factor[id_train],
                 conditions = conditions[id_train])
         test_dataset = train.warp_dataset(self.X_input[id_test], 
                 None if self.covariates is None else self.covariates[id_test],
                 batch_size, 
-                self.X_output[id_test], 
+                None if self.model_type is 'Gaussian' else self.X_output[id_test], 
                 self.scale_factor[id_test],
                 conditions = conditions[id_test])
 
@@ -223,21 +223,14 @@ class VITAE():
             
 
     def update_z(self):
-        self.z = self.get_latent_z()        
+        ''' get the posterier mean of current latent space z (encoder output)
+        '''
+
+        self.z = self.vae.get_z(self.X_input, self.covariates) 
+        
         self._adata_z = sc.AnnData(self.z)
         sc.pp.neighbors(self._adata_z)
 
-            
-    def get_latent_z(self):
-        ''' get the posterier mean of current latent space z (encoder output)
-
-        Returns
-        ----------
-        z : np.array
-            \([N,d]\) The latent means.
-        ''' 
-        c = None if self.covariates is None else self.covariates
-        return self.vae.get_z(self.X_input, c)
             
     
     def visualize_latent(self, method: str = "UMAP", 
@@ -399,7 +392,7 @@ class VITAE():
         self.inferer = Inferer(self.n_states)
         self.mu = self.vae.latent_space.mu.numpy()
         self.pi = np.triu(np.ones(self.n_states))
-        self.pi[self.pi > 0] = tf.nn.softmax(self.vae.latent_space.pi).numpy()[0]
+        self.pi[self.pi > 0] = tf.nn.softmax(self.vae.latent_space.log_pi).numpy()[0]
 
         if pilayer:
             self.vae.create_pilayer()
@@ -471,7 +464,7 @@ class VITAE():
             self.inferer = Inferer(self.n_states)
             self.mu = self.vae.latent_space.mu.numpy()
             self.pi = np.triu(np.ones(self.n_states))
-            self.pi[self.pi > 0] = tf.nn.softmax(self.vae.latent_space.pi).numpy()[0]
+            self.pi[self.pi > 0] = tf.nn.softmax(self.vae.latent_space.log_pi).numpy()[0]
 
 
 
@@ -573,7 +566,7 @@ class VITAE():
         self.update_z()
         self.mu = self.vae.latent_space.mu.numpy()
         self.pi = np.triu(np.ones(self.n_states))
-        self.pi[self.pi > 0] = tf.nn.softmax(self.vae.latent_space.pi).numpy()[0]
+        self.pi[self.pi > 0] = tf.nn.softmax(self.vae.latent_space.log_pi).numpy()[0]
             
  #       if path_to_weights is not None:
  #           self.save_model(path_to_weights)
@@ -612,7 +605,7 @@ class VITAE():
         test_dataset = train.warp_dataset(self.X_input, 
                 self.covariates,
                 batch_size)
-        _, _, self.pc_x,\
+        _, _, self.posterior_c,\
             self.cell_position_posterior,self.cell_position_variance,_ = self.vae.inference(test_dataset, L=L)
             
         uni_cluster_labels = self.labels_map['label_names'].to_numpy()
@@ -646,7 +639,7 @@ class VITAE():
             The weighted graph with weight on each edge indicating its score of existence.
         '''
         # build_graph, return graph
-        self.backbone = self.inferer.build_graphs(self.cell_position_posterior, self.pc_x,
+        self.backbone = self.inferer.build_graphs(self.cell_position_posterior, self.posterior_c,
                 method, thres, no_loop, cutoff)
         self.cell_position_projected = self.inferer.modify_wtilde(self.cell_position_posterior, 
                 np.array(list(self.backbone.edges)))
@@ -940,7 +933,7 @@ class VITAE():
             self.z[self.labels==begin_node_true,:,np.newaxis] -
             self.mu[np.newaxis,:,:])**2, axis=(0,1))))
         
-        G, edges = self.inferer.init_inference(self.cell_position_posterior, self.pc_x, thres, method, no_loop)
+        G, edges = self.inferer.init_inference(self.cell_position_posterior, self.posterior_c, thres, method, no_loop)
         G, w, pseudotime = self.inferer.infer_trajectory(begin_node_pred, self.label_names, cutoff=cutoff, path=path, is_plot=False)
         
         # 1. Topology
