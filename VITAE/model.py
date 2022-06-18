@@ -599,7 +599,7 @@ class VariationalAutoEncoder(tf.keras.Model):
 
         if not pre_train:
             log_pi = self.pilayer(pi_cov) if self.pilayer is not None else None
-            _log_p_z = self.latent_space(z, log_pi, inference=False)
+            log_p_z = self.latent_space(z, log_pi, inference=False)
 
             # - E_q[log p(z)]
             self.add_loss(- log_p_z)
